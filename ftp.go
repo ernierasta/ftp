@@ -8,6 +8,7 @@ import (
 	"context"
 	"crypto/tls"
 	"errors"
+	"fmt"
 	"io"
 	"net"
 	"net/textproto"
@@ -38,6 +39,7 @@ type ServerConn struct {
 	features      map[string]string
 	skipEPSV      bool
 	mlstSupported bool
+	mdtmSupported bool
 }
 
 // DialOption represents an option to start a new connection with Dial
@@ -137,6 +139,10 @@ func Dial(addr string, options ...DialOption) (*ServerConn, error) {
 
 	if _, mlstSupported := c.features["MLST"]; mlstSupported {
 		c.mlstSupported = true
+	}
+
+	if _, mdtmSupported := c.features["MDTM"]; mdtmSupported {
+		c.mdtmSupported = true
 	}
 
 	return c, nil
@@ -577,6 +583,19 @@ func (c *ServerConn) FileSize(path string) (int64, error) {
 	}
 
 	return strconv.ParseInt(msg, 10, 64)
+}
+
+// FileModDate issues a SIZE MDTM command, which Returns the modification date of the file
+func (c *ServerConn) FileModDate(path string) (time.Time, error) {
+	if !c.mdtmSupported {
+		return time.Time{}, fmt.Errorf("MDTM commond unsuported")
+	}
+	_, msg, err := c.cmd(StatusFile, "MDTM %s", path)
+	if err != nil {
+		return time.Time{}, err
+	}
+
+	return time.ParseInLocation("20060102150405", msg, c.options.location)
 }
 
 // Retr issues a RETR FTP command to fetch the specified file from the remote
