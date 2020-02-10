@@ -40,6 +40,7 @@ type ServerConn struct {
 	skipEPSV      bool
 	mlstSupported bool
 	mdtmSupported bool
+	mfmtSupported bool
 }
 
 // DialOption represents an option to start a new connection with Dial
@@ -144,7 +145,9 @@ func Dial(addr string, options ...DialOption) (*ServerConn, error) {
 	if _, mdtmSupported := c.features["MDTM"]; mdtmSupported {
 		c.mdtmSupported = true
 	}
-
+	if _, mfmtSupported := c.features["MFMT"]; mfmtSupported {
+		c.mfmtSupported = true
+	}
 	return c, nil
 }
 
@@ -585,17 +588,30 @@ func (c *ServerConn) FileSize(path string) (int64, error) {
 	return strconv.ParseInt(msg, 10, 64)
 }
 
-// FileModDate issues a SIZE MDTM command, which Returns the modification date of the file
+// FileModDate issues a MDTM command, which Returns the modification date of the file
 func (c *ServerConn) FileModDate(path string) (time.Time, error) {
 	if !c.mdtmSupported {
-		return time.Time{}, fmt.Errorf("MDTM commond unsuported")
+		return time.Time{}, fmt.Errorf("MDTM command unsuported")
 	}
-	_, msg, err := c.cmd(StatusFile, "MDTM %s", path)
+	_, msg, err := c.cmd(StatusFile, "MDTM %s", path) //StatusRequestedFileActionOK
 	if err != nil {
 		return time.Time{}, err
 	}
 
 	return time.ParseInLocation("20060102150405", msg, c.options.location)
+}
+
+// SetModDate issues a MFTM command, which sets modify date for file
+func (c *ServerConn) SetModDate(path string, mdate time.Time) error {
+	if !c.mfmtSupported {
+		return fmt.Errorf("MFMT command unsuported")
+	}
+	_, _, err := c.cmd(StatusFile, "MDTM %d %s", mdate.Format("20060102150405"), path) //StatusRequestedFileActionOK
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // Retr issues a RETR FTP command to fetch the specified file from the remote
